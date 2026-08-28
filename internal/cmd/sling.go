@@ -1053,6 +1053,13 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 
 	fmt.Printf("%s Work attached to hook (status=hooked)\n", style.Bold.Render("✓"))
 
+	// Give the attached molecule's steps the address the root just resolved to.
+	// Steps come out of the formula carrying its bare pool role, which names no
+	// single agent and leaves them unfindable by assignee.
+	if attachedMoleculeID != "" {
+		propagateAssigneeToSteps(beads.ResolveHookDir(townRoot, attachedMoleculeID, hookWorkDir), attachedMoleculeID, targetAgent)
+	}
+
 	// Log sling event to activity feed
 	_ = events.LogFeed(events.TypeSling, actor, events.SlingPayload(beadID, targetAgent))
 
