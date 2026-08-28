@@ -350,3 +350,18 @@ func addressForRole(role Role, rigName, workerName string) (agentaddr.Address, b
 	}
 	return addr, addr.IsComplete()
 }
+
+// assigneeFlag renders the `--assignee` flag for a `bd update`, canonicalizing
+// the address on the way through.
+//
+// Every write site used to interpolate whatever string it happened to hold, so
+// the same agent landed in storage under several spellings and exact-match
+// lookups missed rows that plainly existed (gt-cw1). Routing the flag through
+// one helper means a new write site cannot reintroduce the split by accident.
+//
+// Normalize leaves unrecognised or incomplete input untouched apart from
+// trimming, so a write site that holds something this package cannot parse
+// still stores what the caller meant rather than a guess.
+func assigneeFlag(addr string) string {
+	return "--assignee=" + agentaddr.Normalize(addr)
+}

@@ -130,3 +130,71 @@ func TestNormalizeAddressPreservesMailBehaviour(t *testing.T) {
 		}
 	}
 }
+
+// TestAssigneeFlagCanonicalizesWriteSites pins the gap that made 4780 worth
+// porting onto this branch: every `bd update --assignee=` write site now routes
+// through one helper, so the same agent cannot land in storage under two
+// spellings depending on which command wrote the row (gt-cw1).
+func TestAssigneeFlagCanonicalizesWriteSites(t *testing.T) {
+	cases := []struct {
+		name string
+		addr string
+		want string
+	}{
+		{
+			name: "bare deacon gains the trailing slash sling always wrote",
+			addr: "deacon",
+			want: "--assignee=deacon/",
+		},
+		{
+			name: "deacon with trailing slash is already canonical",
+			addr: "deacon/",
+			want: "--assignee=deacon/",
+		},
+		{
+			name: "legacy singular polecat segment becomes plural",
+			addr: "gastown/polecat/toast",
+			want: "--assignee=gastown/polecats/toast",
+		},
+		{
+			name: "legacy singular dog segment becomes plural",
+			addr: "deacon/dog/alpha",
+			want: "--assignee=deacon/dogs/alpha",
+		},
+		{
+			name: "rig-scoped deacon collapses to the one town-level deacon",
+			addr: "gastown/deacon",
+			want: "--assignee=deacon/",
+		},
+		{
+			name: "surrounding space is trimmed",
+			addr: "  gastown/polecats/toast  ",
+			want: "--assignee=gastown/polecats/toast",
+		},
+		{
+			name: "already-canonical worker address is unchanged",
+			addr: "gastown/polecats/toast",
+			want: "--assignee=gastown/polecats/toast",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := assigneeFlag(tc.addr); got != tc.want {
+				t.Errorf("assigneeFlag(%q) = %q, want %q", tc.addr, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAssigneeFlagPreservesUnparseableInput guards the deliberate conservatism
+// in Normalize: a write site holding something this package cannot parse must
+// still store what the caller meant rather than a guess or an empty assignee.
+func TestAssigneeFlagPreservesUnparseableInput(t *testing.T) {
+	for _, addr := range []string{"", "not/a/real/address/at/all", "overseer"} {
+		want := "--assignee=" + agentaddr.Normalize(addr)
+		if got := assigneeFlag(addr); got != want {
+			t.Errorf("assigneeFlag(%q) = %q, want %q", addr, got, want)
+		}
+	}
+}
