@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
@@ -1135,40 +1136,39 @@ func runDeaconHealthState(cmd *cobra.Command, args []string) error {
 // agentAddressToIDs converts an agent address to bead ID and session name.
 // Supports formats: "gastown/polecats/max", "gastown/witness", "deacon", "mayor"
 // Note: Town-level agents (Mayor, Deacon) use hq- prefix bead IDs stored in town beads.
+//
+// Parsing is delegated to agentaddr so every spelling of an address resolves
+// here: a bare "deacon" and the canonical "deacon/" used to take different
+// branches, and the trailing-slash form fell through to the invalid-format
+// error (gt-cw1).
 func agentAddressToIDs(address string) (beadID, sessionName string, err error) {
-	switch address {
-	case constants.RoleDeacon:
-		return beads.DeaconBeadIDTown(), session.DeaconSessionName(), nil
-	case constants.RoleMayor:
-		return beads.MayorBeadIDTown(), session.MayorSessionName(), nil
+	parsed, parseErr := agentaddr.Parse(address)
+	if parseErr != nil {
+		return "", "", fmt.Errorf("invalid agent address format: %s (expected rig/type/name or rig/role)", address)
 	}
 
-	parts := strings.Split(address, "/")
-	switch len(parts) {
-	case 2:
-		// rig/role: "gastown/witness", "gastown/refinery"
-		rig, role := parts[0], parts[1]
-		switch role {
-		case constants.RoleWitness:
-			return session.WitnessSessionName(session.PrefixFor(rig)), session.WitnessSessionName(session.PrefixFor(rig)), nil
-		case constants.RoleRefinery:
-			return session.RefinerySessionName(session.PrefixFor(rig)), session.RefinerySessionName(session.PrefixFor(rig)), nil
-		default:
-			return "", "", fmt.Errorf("unknown role: %s", role)
+	switch parsed.Role {
+	case agentaddr.RoleDeacon:
+		if parsed.Name != "" {
+			return "", "", fmt.Errorf("unknown role: %s", parsed.Name)
 		}
-	case 3:
-		// rig/type/name: "gastown/polecats/max", "gastown/crew/alpha"
-		rig, agentType, name := parts[0], parts[1], parts[2]
-		switch agentType {
-		case "polecats":
-			return session.PolecatSessionName(session.PrefixFor(rig), name), session.PolecatSessionName(session.PrefixFor(rig), name), nil
-		case constants.RoleCrew:
-			return session.CrewSessionName(session.PrefixFor(rig), name), session.CrewSessionName(session.PrefixFor(rig), name), nil
-		default:
-			return "", "", fmt.Errorf("unknown agent type: %s", agentType)
-		}
+		return beads.DeaconBeadIDTown(), session.DeaconSessionName(), nil
+	case agentaddr.RoleMayor:
+		return beads.MayorBeadIDTown(), session.MayorSessionName(), nil
+	case agentaddr.RoleWitness:
+		name := session.WitnessSessionName(session.PrefixFor(parsed.Rig))
+		return name, name, nil
+	case agentaddr.RoleRefinery:
+		name := session.RefinerySessionName(session.PrefixFor(parsed.Rig))
+		return name, name, nil
+	case agentaddr.RolePolecat:
+		name := session.PolecatSessionName(session.PrefixFor(parsed.Rig), parsed.Name)
+		return name, name, nil
+	case agentaddr.RoleCrew:
+		name := session.CrewSessionName(session.PrefixFor(parsed.Rig), parsed.Name)
+		return name, name, nil
 	default:
-		return "", "", fmt.Errorf("invalid agent address format: %s (expected rig/type/name or rig/role)", address)
+		return "", "", fmt.Errorf("unknown role: %s", parsed.Role)
 	}
 }
 

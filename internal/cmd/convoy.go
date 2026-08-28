@@ -20,6 +20,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
 	convoyops "github.com/steveyegge/gastown/internal/convoy"
@@ -2841,26 +2842,26 @@ func getWorkersForIssues(issueIDs []string) map[string]*workerInfo {
 }
 
 // parseWorkerFromAgentBead extracts worker identity from agent bead ID.
-// Input: "gt-gastown-polecat-nux" -> Output: "gastown/polecat/nux"
+// Input: "gt-gastown-polecat-nux" -> Output: "gastown/polecats/nux"
 // Input: "gt-beads-crew-amber" -> Output: "beads/crew/amber"
+//
+// The components are reassembled through agentaddr rather than by string
+// concatenation, so a worker is shown under the same address the rest of the
+// town stores it under (gt-cw1).
 func parseWorkerFromAgentBead(agentID string) string {
 	rig, role, name, ok := beads.ParseAgentBeadID(agentID)
 	if !ok {
 		return ""
 	}
 
-	// Build path from parsed components
-	if rig == "" {
-		// Town-level
-		if name != "" {
-			return role + "/" + name
-		}
-		return role
-	}
+	assembled := role
 	if name != "" {
-		return rig + "/" + role + "/" + name
+		assembled = role + "/" + name
 	}
-	return rig + "/" + role
+	if rig != "" {
+		assembled = rig + "/" + assembled
+	}
+	return agentaddr.Canonical(assembled)
 }
 
 // formatWorkerAge formats a duration as a short string (e.g., "5m", "2h", "1d")
