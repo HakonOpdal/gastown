@@ -1053,6 +1053,11 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 
 	fmt.Printf("%s Work attached to hook (status=hooked)\n", style.Bold.Render("✓"))
 
+	// The hook lands on the base bead here, so the bonded molecule and its step
+	// wisps still carry whatever bd wrote. Point them at the same agent so every
+	// per-agent lookup sees the whole molecule (gt-cw1).
+	propagateMoleculeAssignee(townRoot, attachedMoleculeID, targetAgent, hookWorkDir)
+
 	// Log sling event to activity feed
 	_ = events.LogFeed(events.TypeSling, actor, events.SlingPayload(beadID, targetAgent))
 

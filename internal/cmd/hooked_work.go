@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/beads"
 )
 
@@ -53,6 +54,26 @@ func listAssignedActiveWork(b *beads.Beads, assignee string) ([]*beads.Issue, er
 		}
 	}
 	return nil, nil
+}
+
+// listAssignedActiveWorkForAgent lists active work for an agent across every
+// spelling its address has ever been stored under.
+//
+// Exact-match assignee queries are the reason patrol wisps leaked: `gt sling`
+// wrote "deacon/" while `gt patrol` matched a bare "deacon", so patrol report
+// structurally could not see the wisp on its own hook (gt-cw1). Querying the
+// canonical form alone would strand every row written by an older build, so
+// readers ask for all variants and merge.
+func listAssignedActiveWorkForAgent(b *beads.Beads, assignee string) ([]*beads.Issue, error) {
+	var assigned []*beads.Issue
+	for _, variant := range agentaddr.Variants(assignee) {
+		forVariant, err := listAssignedActiveWorkAcrossStatuses(b, variant)
+		if err != nil {
+			return nil, err
+		}
+		assigned = append(assigned, forVariant...)
+	}
+	return mergeBeadLists(assigned, nil), nil
 }
 
 func listAssignedActiveWorkAcrossStatuses(b *beads.Beads, assignee string) ([]*beads.Issue, error) {

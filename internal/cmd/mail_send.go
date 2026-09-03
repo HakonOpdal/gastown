@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/mail"
@@ -278,8 +279,11 @@ func normalizeReplySubject(subject string) string {
 // normalizeAddress lowercases an address and trims a trailing slash so that
 // "Mayor/" and "mayor" compare equal. Matches identityVariants behavior in
 // mail.Mailbox without depending on its internals.
+//
+// The implementation lives in agentaddr so every subsystem shares one
+// definition; this wrapper keeps the local call sites readable.
 func normalizeAddress(addr string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(addr)), "/")
+	return agentaddr.NormalizeForCompare(addr)
 }
 
 // inferReplyTo searches the sender's mailbox for a single unambiguous message

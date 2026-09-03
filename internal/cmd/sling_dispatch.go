@@ -397,6 +397,10 @@ func executeSling(params SlingParams) (*SlingResult, error) {
 
 	fmt.Printf("  %s Work attached to %s\n", style.Bold.Render("✓"), spawnInfo.PolecatName)
 
+	// The hook lands on the base bead, so the bonded molecule and its step wisps
+	// still carry whatever bd wrote. Point them at the same agent (gt-cw1).
+	propagateMoleculeAssignee(townRoot, attachedMoleculeID, targetAgent, hookWorkDir)
+
 	// 8. Log sling event
 	_ = events.LogFeed(events.TypeSling, actor, events.SlingPayload(beadToHook, targetAgent))
 

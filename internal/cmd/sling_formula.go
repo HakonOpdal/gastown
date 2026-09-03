@@ -507,6 +507,11 @@ func runSlingFormula(ctx context.Context, args []string) (err error) {
 	}
 	fmt.Printf("%s Attached to hook (status=hooked)\n", style.Bold.Render("✓"))
 
+	// Step wisps are written by bd, which does not know the dispatch target, so
+	// they inherit the bare pool role and become invisible to per-agent lookups
+	// until dispatch points them at the resolved address (gt-cw1).
+	propagateMoleculeAssignee(townRoot, wispRootID, targetAgent, formulaWorkDir)
+
 	// Log sling event to activity feed (formula slinging)
 	actor := detectActor()
 	payload := events.SlingPayload(wispRootID, targetAgent)
