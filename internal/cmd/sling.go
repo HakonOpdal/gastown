@@ -924,9 +924,9 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 			fmt.Printf("Would instantiate formula %s:\n", formulaName)
 			fmt.Printf("  1. bd cook %s\n", formulaName)
 			fmt.Printf("  2. bd mol bond %s %s --json --ephemeral --var feature=\"%s\" --var issue=\"%s\"\n", formulaName, beadID, info.Title, beadID)
-			fmt.Printf("  3. bd update %s --status=hooked --assignee=%s\n", beadID, targetAgent)
+			fmt.Printf("  3. bd update %s --status=hooked %s\n", beadID, assigneeFlag(targetAgent))
 		} else {
-			fmt.Printf("Would run: bd update %s --status=hooked --assignee=%s\n", beadID, targetAgent)
+			fmt.Printf("Would run: bd update %s --status=hooked %s\n", beadID, assigneeFlag(targetAgent))
 		}
 		if slingSubject != "" {
 			fmt.Printf("  subject (in nudge): %s\n", slingSubject)
@@ -1052,6 +1052,11 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 	}
 
 	fmt.Printf("%s Work attached to hook (status=hooked)\n", style.Bold.Render("✓"))
+
+	// The hook lands on the base bead here, so the bonded molecule and its step
+	// wisps still carry whatever bd wrote. Point them at the same agent so every
+	// per-agent lookup sees the whole molecule (gt-cw1).
+	propagateMoleculeAssignee(townRoot, attachedMoleculeID, targetAgent, hookWorkDir)
 
 	// Log sling event to activity feed
 	_ = events.LogFeed(events.TypeSling, actor, events.SlingPayload(beadID, targetAgent))
@@ -1277,7 +1282,7 @@ func restorePinnedBead(townRoot, beadID, assignee string) {
 		return
 	}
 	dir := beads.ResolveHookDir(townRoot, beadID, "")
-	if err := BdCmd("update", beadID, "--status=pinned", "--assignee="+assignee).
+	if err := BdCmd("update", beadID, "--status=pinned", assigneeFlag(assignee)).
 		Dir(dir).
 		WithAutoCommit().
 		Run(); err != nil {

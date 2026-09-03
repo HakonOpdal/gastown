@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/tmux"
 	"github.com/steveyegge/gastown/internal/workspace"
@@ -60,15 +61,11 @@ func sessionToAgentID(sessionName string) string {
 // buildAgentIdentity: town-level agents (mayor, deacon) get a trailing slash.
 // session.AgentIdentity.Address() returns the bare name for those roles, which
 // causes the read/write mismatch in GH#3699.
+//
+// The trailing-slash rule now lives in agentaddr, which is the one place that
+// decides what an address looks like in storage (gt-cw1).
 func canonicalAssigneeAddress(identity *session.AgentIdentity) string {
-	addr := identity.Address()
-	switch identity.Role {
-	case session.RoleMayor, session.RoleDeacon:
-		if !strings.HasSuffix(addr, "/") {
-			return addr + "/"
-		}
-	}
-	return addr
+	return agentaddr.Canonical(identity.Address())
 }
 
 // resolveSelfTarget determines agent identity, pane, and hook root for slinging to self.
@@ -341,4 +338,15 @@ func missingPolecatTargetRig(target string, allowShorthand bool, townRoot string
 		}
 	}
 	return parts[0], true
+}
+
+// assigneeFlag renders the `--assignee` flag for a `bd update`, canonicalizing
+// the address on the way through.
+//
+// Every write site used to interpolate whatever string it happened to hold, so
+// the same agent landed in storage under several spellings and exact-match
+// lookups missed rows that plainly existed (gt-cw1). Routing the flag through
+// one helper means a new write site cannot reintroduce the split by accident.
+func assigneeFlag(addr string) string {
+	return "--assignee=" + agentaddr.Canonical(addr)
 }

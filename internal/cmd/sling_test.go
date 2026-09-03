@@ -510,6 +510,9 @@ exit /b 0
 	gotCreate := false
 	gotTargetDBCheck := false
 	gotFormulaShow := false
+	gotWispShow := false
+	gotWispAssign := false
+	gotWispChildren := false
 	gotHook := false
 	gotMetadata := false
 	gotReviewOnlyMetadata := false
@@ -561,6 +564,27 @@ exit /b 0
 		case strings.Contains(args, "show "+newBeadID) && strings.Contains(args, "--json"):
 			gotTargetDBCheck = true
 			assertTargetRig("target DB check", dir, beadsDir, database, beadsDB, bdDB, dataDir, gtData, args)
+		case strings.Contains(args, "show gt-wisp-") && strings.Contains(args, "--json"):
+			// Molecule step assignee propagation reads the dispatched wisp
+			// root; it must be pinned to the target rig database too.
+			gotWispShow = true
+			assertTargetRig("wisp show", dir, beadsDir, database, beadsDB, bdDB, dataDir, gtData, args)
+		case strings.Contains(args, "update gt-wisp-") && strings.Contains(args, "--assignee="):
+			// Step/root assignee propagation writes the dispatch address; the
+			// write must land in the target rig database, not the ambient one.
+			gotWispAssign = true
+			// This test slings to two targets; either canonical address is
+			// valid here, but a non-canonical spelling is the gt-cw1 bug.
+			if !strings.Contains(args, "--assignee=gastown/polecats/toast") && !strings.Contains(args, "--assignee=mayor/") {
+				t.Fatalf("bd wisp assign args = %q, want a canonical dispatch address", args)
+			}
+			assertTargetRig("wisp assign", dir, beadsDir, database, beadsDB, bdDB, dataDir, gtData, args)
+		case (strings.Contains(args, "list ") && strings.Contains(args, "--parent=gt-wisp-")) ||
+			(strings.Contains(args, "query ") && strings.Contains(args, `parent="gt-wisp-`)):
+			// Walking the molecule's step tree for assignee propagation spans
+			// both the issues and the ephemeral wisp tables.
+			gotWispChildren = true
+			assertTargetRig("wisp children", dir, beadsDir, database, beadsDB, bdDB, dataDir, gtData, args)
 		case strings.Contains(args, "sql SELECT DISTINCT wisp_dependencies.issue_id"):
 			assertTargetRig("molecule dep check", dir, beadsDir, database, beadsDB, bdDB, dataDir, gtData, args)
 		case strings.Contains(args, "formula show "):
@@ -605,9 +629,9 @@ exit /b 0
 		}
 	}
 
-	if !gotCreate || !gotTargetDBCheck || !gotFormulaShow || !gotPolecatCook || !gotReviewCook || gotBondCount < 2 || !gotHook || !gotMetadata || !gotReviewOnlyMetadata {
-		t.Fatalf("missing expected bd commands: create=%v targetDBCheck=%v formulaShow=%v polecatCook=%v reviewCook=%v bondCount=%d hook=%v metadata=%v reviewOnlyMetadata=%v (log: %q)",
-			gotCreate, gotTargetDBCheck, gotFormulaShow, gotPolecatCook, gotReviewCook, gotBondCount, gotHook, gotMetadata, gotReviewOnlyMetadata, string(logBytes))
+	if !gotCreate || !gotTargetDBCheck || !gotFormulaShow || !gotWispShow || !gotWispAssign || !gotWispChildren || !gotPolecatCook || !gotReviewCook || gotBondCount < 2 || !gotHook || !gotMetadata || !gotReviewOnlyMetadata {
+		t.Fatalf("missing expected bd commands: create=%v targetDBCheck=%v formulaShow=%v wispShow=%v wispAssign=%v wispChildren=%v polecatCook=%v reviewCook=%v bondCount=%d hook=%v metadata=%v reviewOnlyMetadata=%v (log: %q)",
+			gotCreate, gotTargetDBCheck, gotFormulaShow, gotWispShow, gotWispAssign, gotWispChildren, gotPolecatCook, gotReviewCook, gotBondCount, gotHook, gotMetadata, gotReviewOnlyMetadata, string(logBytes))
 	}
 	if firstReviewOnlyMetadataIndex == -1 || lastHookIndex == -1 || firstReviewOnlyMetadataIndex > lastHookIndex {
 		t.Fatalf("review-only metadata must be stored before raw hook assignment: metadataIndex=%d hookIndex=%d log: %q", firstReviewOnlyMetadataIndex, lastHookIndex, string(logBytes))

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/steveyegge/gastown/internal/agentaddr"
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/cli"
 	"github.com/steveyegge/gastown/internal/constants"
@@ -27,6 +28,16 @@ type PatrolConfig struct {
 	WorkLoopSteps []string     // role-specific instructions
 	ExtraVars     []string     // additional --var key=value args for wisp creation
 	Beads         *beads.Beads // optional injected beads instance (for test isolation)
+}
+
+// assigneeAddress returns the canonical storage form of the patrol assignee.
+//
+// Callers set Assignee from role literals ("deacon") and rig concatenation
+// ("gastown/witness"). Canonicalizing here, rather than at each construction
+// site, is what stops the two halves of `gt patrol` from drifting apart from
+// `gt sling` again (gt-cw1).
+func (cfg PatrolConfig) assigneeAddress() string {
+	return agentaddr.Canonical(cfg.Assignee)
 }
 
 // maxStalePurgePerRun caps the number of stale patrol beads cleaned up in a
@@ -55,7 +66,7 @@ func findActivePatrol(cfg PatrolConfig) (patrolID, patrolLine string, found bool
 	}
 
 	// Find active patrol beads for this agent across durable issues and wisps.
-	hookedBeads, listErr := listAssignedActiveWorkAcrossStatuses(b, cfg.Assignee)
+	hookedBeads, listErr := listAssignedActiveWorkForAgent(b, cfg.Assignee)
 	if listErr != nil {
 		return "", "", false, fmt.Errorf("listing active patrol work: %w", listErr)
 	}
@@ -160,7 +171,7 @@ func burnPreviousPatrolWisps(cfg PatrolConfig) {
 	}
 
 	// Find all active patrol beads for this agent across durable issues and wisps.
-	hookedBeads, err := listAssignedActiveWorkAcrossStatuses(b, cfg.Assignee)
+	hookedBeads, err := listAssignedActiveWorkForAgent(b, cfg.Assignee)
 	if err != nil {
 		style.PrintWarning("burn: could not list active patrol work: %v", err)
 		return
@@ -292,7 +303,7 @@ func autoSpawnPatrol(cfg PatrolConfig) (string, error) {
 	}
 
 	// Hook the wisp to the agent so gt mol status sees it
-	if err := BdCmd("update", patrolID, "--status=hooked", "--assignee="+cfg.Assignee).
+	if err := BdCmd("update", patrolID, "--status=hooked", "--assignee="+cfg.assigneeAddress()).
 		WithAutoCommit().
 		WithBeadsDir(resolvedBeadsDir).
 		Dir(cfg.BeadsDir).
@@ -324,12 +335,12 @@ func renderPatrolWispDescription(cfg PatrolConfig) (string, error) {
 	return renderFormulaRootAndStepsFull(cfg.PatrolMolName, cfg.BeadsDir, rigName, vars)
 }
 
+// patrolRigName returns the rig a patrol belongs to, or "" for town-level
+// patrols. Splitting on the first slash would read "deacon" as a rig name once
+// the deacon assignee carries its canonical trailing slash, so the rig comes
+// from the parsed address instead.
 func patrolRigName(cfg PatrolConfig) string {
-	rigName, _, ok := strings.Cut(cfg.Assignee, "/")
-	if !ok {
-		return ""
-	}
-	return rigName
+	return agentaddr.Rig(cfg.Assignee)
 }
 
 func updatePatrolWispDescription(cfg PatrolConfig, resolvedBeadsDir, patrolID, desc string) error {
@@ -406,8 +417,8 @@ func refineryPatrolSafetyStop(cfg PatrolConfig) (*refinery.SafetyStop, error) {
 	if cfg.RoleName != "refinery" {
 		return nil, nil
 	}
-	rigName := strings.TrimSuffix(cfg.Assignee, "/refinery")
-	if rigName == cfg.Assignee || rigName == "" {
+	rigName := agentaddr.Rig(cfg.Assignee)
+	if rigName == "" {
 		return nil, nil
 	}
 	return refinery.ActiveSafetyStop(cfg.BeadsDir, rigName)
